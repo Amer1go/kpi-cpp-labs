@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <string>
 
-static const wchar_t szClassName[] = L"Alex";
+static const wchar_t szClassName[] = L"OleksandrAndMykhailo";
 static const wchar_t szTitle[] = L"LabWork #1, variant 6, Group 6";
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -97,9 +97,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
     break;
 
-    case WM_SIZE:
+    /*case WM_SIZE:
         InvalidateRect(hWnd, nullptr, TRUE);
         break;
+    */
 
     case WM_DESTROY:
         PostQuitMessage(0);
