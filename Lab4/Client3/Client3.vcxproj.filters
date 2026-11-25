@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\LB04_server.cpp">
+    <ClCompile Include="..\src\LB04_client.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
