@@ -92,18 +92,37 @@ static int ServerMain(bool spawnClients)
 
 // ======================= КЛІЄНТ =======================
 // >>> ТУТ формується повідомлення за замовчуванням. Для іншого варіанта міняти лише цю функцію. <<<
+static BOOL CALLBACK CountWin(HWND h, LPARAM lp)
+{
+    if (IsWindowVisible(h) && !GetWindow(h, GW_OWNER) && GetWindowTextLengthW(h) > 0)
+        ++*(int*)lp;
+    return TRUE;
+}
+
 static void BuildDefault(int id, wchar_t* out, size_t n)
 {
+    HDC hdc = GetDC(NULL);
     if (id == 1)
     {
-        RECT r = {}; GetWindowRect(GetConsoleWindow(), &r);
-        swprintf(out, n, L"Client 1: screen=%dx%d, console window=%ldx%ld",
-                 GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
-                 (long)(r.right - r.left), (long)(r.bottom - r.top));
+        SYSTEM_POWER_STATUS ps = {};
+        GetSystemPowerStatus(&ps);
+        wchar_t bat[64];
+        if (ps.BatteryFlag == 128) swprintf(bat, 64, L"no battery");
+        else swprintf(bat, 64, L"%u%%, %ls", ps.BatteryLifePercent == 255 ? 0u : (unsigned)ps.BatteryLifePercent,
+                      ps.ACLineStatus == 1 ? L"AC power" : L"on battery");
+        DEVMODEW dm = {}; dm.dmSize = sizeof(dm);
+        EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm);
+        swprintf(out, n, L"Client 1: battery=%ls, refresh rate=%lu Hz, color depth=%d bit",
+                 bat, dm.dmDisplayFrequency, GetDeviceCaps(hdc, BITSPIXEL));
     }
     else
-        swprintf(out, n, L"Client 2: icon=%dx%d, caption height=%d",
-                 GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), GetSystemMetrics(SM_CYCAPTION));
+    {
+        int count = 0;
+        EnumWindows(CountWin, (LPARAM)&count);
+        swprintf(out, n, L"Client 2: open windows=%d, frame width (SM_CXFRAME)=%d px, DPI Y=%d",
+                 count, GetSystemMetrics(SM_CXFRAME), GetDeviceCaps(hdc, LOGPIXELSY));
+    }
+    ReleaseDC(NULL, hdc);
 }
 
 static bool Exchange(HANDLE h, const wchar_t* msg, wchar_t* reply, size_t replyCap)
