@@ -1,4 +1,6 @@
 #include <windows.h>
+#include <winspool.h>
+#include <UIAutomation.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -177,18 +179,75 @@ namespace cli {
 static HWND hEdit;
 static int g_id = 1;
 
-// >>> ТУТ формується повідомлення за замовчуванням. Для іншого варіанта міняти лише цю функцію. <<<
+// Ширина кнопки "Пуск": у Windows 11 це XAML-елемент панелі задач (AutomationId "StartButton"),
+// тому шукаємо його через UI Automation; у Windows 10 це дочірнє вікно класу "Start".
+static int StartButtonWidth()
+{
+    HWND tray = FindWindowW(L"Shell_TrayWnd", NULL);
+    if (!tray) return -1;
+    HWND start = FindWindowExW(tray, NULL, L"Start", NULL);
+    if (start)
+    {
+        RECT r; GetWindowRect(start, &r);
+        return (int)(r.right - r.left);
+    }
+    int width = -1;
+    HRESULT hrInit = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    IUIAutomation* uia = NULL;
+    if (SUCCEEDED(CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER,
+                                   __uuidof(IUIAutomation), (void**)&uia)))
+    {
+        IUIAutomationElement* root = NULL;
+        if (SUCCEEDED(uia->ElementFromHandle(tray, &root)) && root)
+        {
+            VARIANT v; VariantInit(&v);
+            v.vt = VT_BSTR; v.bstrVal = SysAllocString(L"StartButton");
+            IUIAutomationCondition* cond = NULL;
+            if (SUCCEEDED(uia->CreatePropertyCondition(UIA_AutomationIdPropertyId, v, &cond)))
+            {
+                IUIAutomationElement* btn = NULL;
+                if (SUCCEEDED(root->FindFirst(TreeScope_Descendants, cond, &btn)) && btn)
+                {
+                    RECT r;
+                    if (SUCCEEDED(btn->get_CurrentBoundingRectangle(&r))) width = (int)(r.right - r.left);
+                    btn->Release();
+                }
+                cond->Release();
+            }
+            VariantClear(&v);
+            root->Release();
+        }
+        uia->Release();
+    }
+    if (SUCCEEDED(hrInit)) CoUninitialize();
+    return width;
+}
+
+// >>> ТУТ формується повідомлення за замовчуванням (варіант 3 таблиці ЛБ4). <<<
 static void BuildDefault(wchar_t* out, size_t n)
 {
+    HDC dc = GetDC(NULL);
+    int bits = GetDeviceCaps(dc, BITSPIXEL);
+    int dpiY = GetDeviceCaps(dc, LOGPIXELSY);
+    ReleaseDC(NULL, dc);
+
     if (g_id == 1)
-        swprintf(out, n, L"Дані від Клієнта №1:\r\nКількість кнопок миші = %d\r\nКолесо миші = %ls",
-                 GetSystemMetrics(SM_CMOUSEBUTTONS), GetSystemMetrics(SM_MOUSEWHEELPRESENT) ? L"Так" : L"Ні");
+    {
+        wchar_t printer[256]; DWORD len = 256;
+        BOOL hasPrinter = GetDefaultPrinterW(printer, &len);
+        swprintf(out, n, L"Дані від Клієнта №1:\r\nРоздільна здатність екрану = %d x %d\r\n"
+                         L"Принтер = %ls%ls%ls\r\nГлибина кольору = %d біт",
+                 GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
+                 hasPrinter ? L"Так (" : L"Ні", hasPrinter ? printer : L"", hasPrinter ? L")" : L"", bits);
+    }
     else
     {
-        MEMORYSTATUSEX ms = {}; ms.dwLength = sizeof(ms);
-        GlobalMemoryStatusEx(&ms);
-        swprintf(out, n, L"Дані від Клієнта №2:\r\nРозмір файлу підкачки: %llu байт\r\nВільно у файлі підкачки: %llu байт",
-                 (unsigned long long)ms.ullTotalPageFile, (unsigned long long)ms.ullAvailPageFile);
+        int w = StartButtonWidth();
+        wchar_t ws[32];
+        if (w >= 0) swprintf(ws, 32, L"%d px", w); else wcscpy(ws, L"не знайдено");
+        swprintf(out, n, L"Дані від Клієнта №2:\r\nВисота кнопок у меню = %d px\r\n"
+                         L"Ширина кнопки \"Пуск\" = %ls\r\nDPI вертикально = %d",
+                 GetSystemMetrics(SM_CYMENUSIZE), ws, dpiY);
     }
 }
 
